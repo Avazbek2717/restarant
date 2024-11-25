@@ -13,11 +13,11 @@ dp = Dispatcher()
 food_menu = [
     {"name": "Pizza", "price": "50,000 UZS"},
     {"name": "Burger", "price": "30,000 UZS"},
-    {"name": "Salat", "price": "20,000 UZS"},
+    {"name": "Salad", "price": "20,000 UZS"},
     {"name": "Lag'mon", "price": "40,000 UZS"},
     {"name": "Shashlik", "price": "25,000 UZS"},
-    {"name": "Choy", "price": "5,000 UZS"},
-    {"name": "Sharbat", "price": "15,000 UZS"}
+    {"name": "Tea", "price": "5,000 UZS"},
+    {"name": "Juice", "price": "15,000 UZS"}
 ]
 
 class RegistrForm(StatesGroup):
@@ -39,7 +39,7 @@ def inline_button():
 
 @dp.message(CommandStart())
 async def start(message: Message, state: FSMContext):
-    await message.reply(text="Tilni tanlang / Выберите язык / choose language:", reply_markup=inline_button())
+    await message.reply(text="Tilni tanlang / Выберите язык / Choose language:", reply_markup=inline_button())
     await state.set_state(RegistrForm.language)
 
 
@@ -48,22 +48,20 @@ async def callback_language(callback: types.CallbackQuery, state: FSMContext):
     if callback.data == "uz":
         await state.update_data(language="uz")
         await callback.message.answer("Til o'rnatildi: O'zbek tili. \nIsmingizni kiriting:")
-        await state.set_state(RegistrForm.full_name)
     elif callback.data == "ru":
         await state.update_data(language="ru")
         await callback.message.answer("Язык установлен: Русский. \nВведите ваше имя:")
-        await state.set_state(RegistrForm.full_name)
-    elif callback.data == 'eng':
-        await state.update_data(language = "eng")
-        await callback.message.answer(text="Install language: English language \n select name")
-        await state.set_state(RegistrForm.full_name)
+    elif callback.data == "eng":
+        await state.update_data(language="eng")
+        await callback.message.answer("Language set: English. \nEnter your name:")
+    await state.set_state(RegistrForm.full_name)
     await callback.answer()
 
 
-# Orqaga qaytish tugmasi funksiyasi
 def back_button(language="uz"):
-    text = "Orqaga" if language == "uz" else "Назад"
+    text = "Orqaga" if language == "uz" else "Назад" if language == "ru" else "Back"
     return KeyboardButton(text=text)
+
 
 @dp.message(RegistrForm.full_name)
 async def set_full_name(message: Message, state: FSMContext):
@@ -71,16 +69,19 @@ async def set_full_name(message: Message, state: FSMContext):
     data = await state.get_data()
     language = data.get("language", "uz")
     await state.update_data(full_name=full_name)
-    
-    # "Orqaga" tugmasi bilan yangi klaviatura
+
     buttons = [[back_button(language)]]
     keyboard = ReplyKeyboardMarkup(
         keyboard=buttons,
         resize_keyboard=True,
         selective=True
     )
-    
-    text = "Stol nomerini tanlang" if language == "uz" else "Выберите номер стола"
+
+    text = {
+        "uz": "Stol nomerini tanlang:",
+        "ru": "Выберите номер стола:",
+        "eng": "Select your table number:"
+    }.get(language, "Stol nomerini tanlang:")
     await message.answer(text=text, reply_markup=keyboard)
     await state.set_state(RegistrForm.stol_raqami)
 
@@ -91,40 +92,49 @@ async def set_stol_raqami(message: Message, state: FSMContext):
     data = await state.get_data()
     language = data.get("language", "uz")
 
-    if message.text == "Orqaga" if language == "uz" else "Назад":
-        text = "Ismingizni qayta kiriting:" if language == "uz" else "Введите ваше имя снова:"
+    if message.text == ("Orqaga" if language == "uz" else "Назад" if language == "ru" else "Back"):
+        text = {
+            "uz": "Ismingizni qayta kiriting:",
+            "ru": "Введите ваше имя снова:",
+            "eng": "Enter your name again:"
+        }.get(language, "Ismingizni qayta kiriting:")
         await message.answer(text=text)
         await state.set_state(RegistrForm.full_name)
         return
 
     if not stol_raqami.isdigit():
-        text = "Noto'g'ri stol raqami kiritdingiz. Raqamni qayta kiriting." if language == "uz" else "Неверный номер стола. Попробуйте снова."
+        text = {
+            "uz": "Noto'g'ri stol raqami kiritdingiz. Raqamni qayta kiriting.",
+            "ru": "Неверный номер стола. Попробуйте снова.",
+            "eng": "Invalid table number. Please try again."
+        }.get(language, "Noto'g'ri stol raqami kiritdingiz. Raqamni qayta kiriting.")
         return await message.answer(text=text)
 
     await state.update_data(stol_raqami=stol_raqami)
 
-    # Ovqatlar ro'yxati va "Orqaga" tugmasi
     buttons = [[KeyboardButton(text=f"{item['name']} - {item['price']}")] for item in food_menu]
     buttons.append([back_button(language)])
     keyboard = ReplyKeyboardMarkup(
         keyboard=buttons,
         resize_keyboard=True,
-        input_field_placeholder="Tanlang..." if language == "uz" else "Выберите..."
+        input_field_placeholder="Tanlang..." if language == "uz" else "Выберите..." if language == "ru" else "Choose..."
     )
-    
-    text = "Ovqatlardan birini tanlang:" if language == "uz" else "Выберите одно из блюд:"
+
+    text = {
+        "uz": "Ovqatlardan birini tanlang:",
+        "ru": "Выберите одно из блюд:",
+        "eng": "Select one of the dishes:"
+    }.get(language, "Ovqatlardan birini tanlang:")
     await message.answer(text=text, reply_markup=keyboard)
     await state.set_state(RegistrForm.ovqatlar)
 
-
-  # Adminning Telegram ID sini bu yerga yozing
 
 @dp.message(RegistrForm.ovqatlar)
 async def select_food(message: Message, state: FSMContext):
     data = await state.get_data()
     language = data.get("language", "uz")
 
-    if message.text == ("Zakazni yakunlash" if language == "uz" else "Завершить заказ"):
+    if message.text in ["Zakazni yakunlash", "Завершить заказ", "Complete order"]:
         foods = data.get("selected_foods", [])
         food_prices = data.get("food_prices", [])
         stol_raqami = data["stol_raqami"]
@@ -137,19 +147,26 @@ async def select_food(message: Message, state: FSMContext):
             f"Ism: {full_name}\n"
             f"Stol raqami: {stol_raqami}\n"
             f"Buyurtma:\n" + "\n".join([f"- {food} - {price} UZS" for food, price in zip(foods, food_prices)]) +
-            f"\n\nJami: {total_price} UZS\n\nRahmat! Buyurtmangiz qabul qilindi. "
+            f"\n\nJami: {total_price} UZS\n\nRahmat! Buyurtmangiz qabul qilindi."
             if language == "uz"
             else f"Время заказа: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+            f"Имя: {full_name}\n"
             f"Номер стола: {stol_raqami}\n"
             f"Заказ:\n" + "\n".join([f"- {food} - {price} UZS" for food, price in zip(foods, food_prices)]) +
-            f"\n\nИтого: {total_price} UZS\n\nСпасибо! Ваш заказ принят. "
+            f"\n\nИтого: {total_price} UZS\n\nСпасибо! Ваш заказ принят."
+            if language == "ru"
+            else f"Order time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+            f"Name: {full_name}\n"
+            f"Table number: {stol_raqami}\n"
+            f"Order:\n" + "\n".join([f"- {food} - {price} UZS" for food, price in zip(foods, food_prices)]) +
+            f"\n\nTotal: {total_price} UZS\n\nThank you! Your order has been accepted."
         )
         await message.answer(text=text, reply_markup=None)
 
         # Admin uchun xabar
         admin_text = (
             f"Yangi buyurtma qabul qilindi!\n\n"
-            f'Ism {full_name}\n'
+            f"Ism: {full_name}\n"
             f"Stol raqami: {stol_raqami}\n"
             f"Buyurtmalar:\n" + "\n".join([f"- {food} - {price} UZS" for food, price in zip(foods, food_prices)]) +
             f"\n\nJami summa: {total_price} UZS\n"
@@ -171,14 +188,22 @@ async def select_food(message: Message, state: FSMContext):
         food_prices.append(selected_price_int)
         await state.update_data(selected_foods=foods, food_prices=food_prices)
 
-        zakaz_tugatish_button = KeyboardButton(text="Zakazni yakunlash" if language == "uz" else "Завершить заказ")
+        zakaz_tugatish_button = KeyboardButton(
+            text="Zakazni yakunlash" if language == "uz"
+            else "Завершить заказ" if language == "ru"
+            else "Complete order"
+        )
         buttons = [[KeyboardButton(text=f"{item['name']} - {item['price']}")] for item in food_menu]
         buttons.append([zakaz_tugatish_button, back_button(language)])
 
         keyboard = ReplyKeyboardMarkup(
             keyboard=buttons,
             resize_keyboard=True,
-            input_field_placeholder="Tanlang yoki zakazni yakunlang..." if language == "uz" else "Выберите или завершите заказ..."
+            input_field_placeholder=(
+                "Tanlang yoki zakazni yakunlang..." if language == "uz"
+                else "Выберите или завершите заказ..." if language == "ru"
+                else "Choose or complete your order..."
+            )
         )
 
         text = (
@@ -189,8 +214,13 @@ async def select_food(message: Message, state: FSMContext):
             else f"Ваши заказы:\n"
             + "\n".join([f"- {food} - {price}" for food, price in zip(foods, food_prices)])
             + "\n\nНажмите 'Завершить заказ', чтобы закончить."
+            if language == "ru"
+            else f"Your orders:\n"
+            + "\n".join([f"- {food} - {price}" for food, price in zip(foods, food_prices)])
+            + "\n\nPress 'Complete order' to finish."
         )
         await message.answer(text=text, reply_markup=keyboard)
+
 
 
 
